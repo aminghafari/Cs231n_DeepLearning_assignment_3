@@ -283,7 +283,20 @@ def lstm_step_forward(x, prev_h, prev_c, Wx, Wh, b):
     # TODO: Implement the forward pass for a single timestep of an LSTM.        #
     # You may want to use the numerically stable sigmoid implementation above.  #
     #############################################################################
-    pass
+    N, D = x.shape
+    H = prev_h.shape[1]
+    
+    a = np.dot(x,Wx) + np.dot(prev_h, Wh) + b
+    
+    i = sigmoid(a[:,0:H])
+    f = sigmoid(a[:,H:2*H])
+    o = sigmoid(a[:,2*H:3*H])
+    g = np.tanh(a[:,3*H:4*H])
+    
+    next_c = prev_c*f + i*g
+    next_h = o*np.tanh(next_c)
+    
+    cache = (x, prev_h, prev_c, Wx, Wh, i, f, o, g, next_c, next_h)
     ##############################################################################
     #                               END OF YOUR CODE                             #
     ##############################################################################
@@ -308,14 +321,43 @@ def lstm_step_backward(dnext_h, dnext_c, cache):
     - dWh: Gradient of hidden-to-hidden weights, of shape (H, 4H)
     - db: Gradient of biases, of shape (4H,)
     """
-    dx, dh, dc, dWx, dWh, db = None, None, None, None, None, None
+    dx, dprev_h, dprev_c, dWx, dWh, db = None, None, None, None, None, None
     #############################################################################
     # TODO: Implement the backward pass for a single timestep of an LSTM.       #
     #                                                                           #
     # HINT: For sigmoid and tanh you can compute local derivatives in terms of  #
     # the output value from the nonlinearity.                                   #
     #############################################################################
-    pass
+    x, prev_h, prev_c, Wx, Wh, i, f, o, g, next_c ,next_h = cache
+    N, D = x.shape
+    H = prev_h.shape[1]
+    
+    dnext_c1 = dnext_c + dnext_h*o * (1.-np.tanh(next_c)*np.tanh(next_c))
+    
+    di = dnext_c1 * g
+    df = dnext_c1 * prev_c
+    do = dnext_h * np.tanh(next_c)
+    dg = dnext_c1 * i
+    
+    dai = di* i*(1. - i)
+    daf = df* f*(1. - f)
+    dao = do* o*(1. - o)
+    dag = dg*(1. - g**2)
+    
+    da = np.zeros((N, 4*H))
+    da[:, 0:H]     = dai
+    da[:, H:2*H]   = daf
+    da[:, 2*H:3*H] = dao
+    da[:, 3*H:4*H] = dag
+    
+    # derivatives
+    dprev_c = dnext_c1*f
+    
+    dx = np.dot(da, Wx.T)
+    dprev_h = np.dot(da, Wh.T)
+    dWx = np.dot(x.T, da)
+    dWh = np.dot(prev_h.T, da)
+    db = np.sum(da,axis=0).T
     ##############################################################################
     #                               END OF YOUR CODE                             #
     ##############################################################################
